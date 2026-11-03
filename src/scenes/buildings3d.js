@@ -1,40 +1,14 @@
 // ビルの棒グラフ（3D）。ビルは0から建っていて、地面より下は土に埋まっている。
-// カメラを引く（pull: 0→1）と土が透けて、埋まっていた部分が見える。
-// 地面の高さ（ground）を下げると、正しいグラフに直る。
+// カメラを引く（explore: 0→1）と土が透けて、埋まっていた部分が見える。
+// 地面の高さ（fix）を下げると、正しいグラフに直る。
 
-import * as THREE from '../../vendor/three.module.js';
-import { clamp01 } from '../judge.js';
+import { THREE, createStage3D, outlineBox, textSprite } from './toon3d.js';
+import { smooth, lerp } from './common.js';
 import { plain } from '../text.js';
 
-const INK = 0x2b2b2b;
 const COLORS = ['#ffb347', '#7ec8e3', '#f78fb3', '#9be37e'];
 const SPACING = 2.2;
 const WIDTH = 1.4;
-const OUTLINE = 0.16;
-
-export function webglAvailable() {
-  try {
-    const c = document.createElement('canvas');
-    return Boolean(window.WebGLRenderingContext && (c.getContext('webgl2') || c.getContext('webgl')));
-  } catch {
-    return false;
-  }
-}
-
-const smooth = (a, b, x) => {
-  const t = clamp01((x - a) / (b - a));
-  return t * t * (3 - 2 * t);
-};
-const lerp = (a, b, t) => a + (b - a) * t;
-
-// トゥーン調の3段階の陰
-function toonGradient() {
-  const tex = new THREE.DataTexture(new Uint8Array([110, 110, 110, 255, 190, 190, 190, 255, 255, 255, 255, 255]), 3, 1);
-  tex.minFilter = THREE.NearestFilter;
-  tex.magFilter = THREE.NearestFilter;
-  tex.needsUpdate = true;
-  return tex;
-}
 
 function windowTexture(color) {
   const c = document.createElement('canvas');
@@ -53,69 +27,14 @@ function windowTexture(color) {
   return tex;
 }
 
-// 太い線の輪郭（裏返した一回り大きい箱）
-function outlineBox(w, h, d) {
-  const geo = new THREE.BoxGeometry(w + OUTLINE, h + OUTLINE, d + OUTLINE);
-  return new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: INK, side: THREE.BackSide }));
-}
-
-function textSprite(text, { color = '#2b2b2b', stroke = '#ffffff', bg = null } = {}) {
-  const font = 'bold 96px "BIZ UDPGothic", "Hiragino Maru Gothic ProN", Meiryo, sans-serif';
-  const c = document.createElement('canvas');
-  const g = c.getContext('2d');
-  g.font = font;
-  const w = Math.ceil(g.measureText(text).width) + 48;
-  c.width = w;
-  c.height = 132;
-  g.font = font;
-  g.textAlign = 'center';
-  g.textBaseline = 'middle';
-  if (bg) {
-    g.fillStyle = bg;
-    g.strokeStyle = '#2b2b2b';
-    g.lineWidth = 10;
-    g.beginPath();
-    g.roundRect(5, 5, w - 10, 122, 30);
-    g.fill();
-    g.stroke();
-  } else {
-    g.lineWidth = 18;
-    g.strokeStyle = stroke;
-    g.lineJoin = 'round';
-    g.strokeText(text, w / 2, 70);
-  }
-  g.fillStyle = color;
-  g.fillText(text, w / 2, 70);
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
-  const sprite = new THREE.Sprite(mat);
-  sprite.renderOrder = 10;
-  sprite.userData.aspect = w / 132;
-  sprite.userData.setSize = (h) => sprite.scale.set(h * sprite.userData.aspect, h, 1);
-  return sprite;
-}
-
 export function createBuildings3D(container, data, { reducedMotion = false } = {}) {
   const startGround = data.ground;
   const top = Math.max(...data.values);
   const xs = data.values.map((_, i) => (i - (data.values.length - 1) / 2) * SPACING);
   const axisX = xs[0] - WIDTH / 2 - 1.2;
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setClearColor('#bfe6ff');
-  container.append(renderer.domElement);
-
-  const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 2000);
-  scene.add(new THREE.HemisphereLight(0xffffff, 0xd8c8a8, 1.6));
-  const sun = new THREE.DirectionalLight(0xffffff, 2.2);
-  sun.position.set(6, 10, 8);
-  scene.add(sun);
-
-  const gradientMap = toonGradient();
-  const toon = (color, extra = {}) => new THREE.MeshToonMaterial({ color, gradientMap, ...extra });
+  const stage = createStage3D(container, { fix: startGround, reducedMotion });
+  const { scene, toon } = stage;
 
   // ビル（0から建っている）。本当の比率のままだと遠くから見たとき細い線になるので、
   // カメラを引くにつれてグラフを横にも広げる（chart.scale.x）。
@@ -207,50 +126,30 @@ export function createBuildings3D(container, data, { reducedMotion = false } = {
   const near = { pos: new THREE.Vector3(1.6, startGround + 5, 12.5), look: new THREE.Vector3(0, startGround + 3.8, 0) };
   const far = { pos: new THREE.Vector3(14, top * 0.55, top * 1.62), look: new THREE.Vector3(0, top * 0.5, 0) };
 
-  const state = { pull: 0, pullTarget: 0, ground: startGround, groundTarget: startGround, highlight: false };
-  let onPull = () => {};
-  let wheelEnabled = false;
-
-  function layout() {
-    const w = container.clientWidth;
-    const h = container.clientHeight;
-    renderer.setSize(w, h, false);
-    camera.aspect = w / h;
-    // 縦長の画面では、横がはみ出さないように少し離れる
-    camera.userData.widen = Math.max(1, 1.5 / camera.aspect);
-    camera.updateProjectionMatrix();
-  }
-  const ro = new ResizeObserver(layout);
-  ro.observe(container);
-  layout();
-
-  function apply(time) {
-    const t = smooth(0, 1, state.pull);
-    const pos = near.pos.clone().lerp(far.pos, t);
-    const look = near.look.clone().lerp(far.look, t);
-    pos.sub(look).multiplyScalar(camera.userData.widen).add(look);
-    camera.position.copy(pos);
-    camera.lookAt(look);
+  stage.start((state, time) => {
+    const pull = state.explore;
+    const t = smooth(0, 1, pull);
+    stage.placeCamera(near.pos.clone().lerp(far.pos, t), near.look.clone().lerp(far.look, t));
 
     const spread = lerp(1, 7, t);
     chart.scale.x = spread;
     axis.position.x = axisX * (spread - 1);
 
-    const g = state.ground;
+    const g = Math.max(0, state.fix);
     slabGroup.position.y = g - 0.15;
     // 土の上の面は地面の板の下に置く（重なってちらつかないように）
     soil.visible = g > 0.35;
     soil.scale.y = Math.max(g - 0.3, 0.001);
-    soilMat.opacity = lerp(1, 0.5, smooth(0.25, 0.8, state.pull));
+    soilMat.opacity = lerp(1, 0.5, smooth(0.25, 0.8, pull));
 
-    const nearAlpha = 1 - smooth(0.2, 0.55, state.pull);
+    const nearAlpha = 1 - smooth(0.2, 0.55, pull);
     nearTicks.visible = nearAlpha > 0.01;
     nearLabels.forEach((s) => (s.material.opacity = nearAlpha));
-    const farAlpha = smooth(0.5, 0.9, state.pull);
+    const farAlpha = smooth(0.5, 0.9, pull);
     farTicks.visible = farAlpha > 0.01;
     farLabels.forEach((s) => (s.material.opacity = farAlpha));
     roofLabels.forEach(({ label, x, v }) => {
-      label.material.opacity = smooth(0.75, 1, state.pull);
+      label.material.opacity = smooth(0.75, 1, pull);
       label.userData.setSize(4.5);
       label.position.set(x * spread, v + 4, 0);
     });
@@ -263,55 +162,7 @@ export function createBuildings3D(container, data, { reducedMotion = false } = {
     banner.material.opacity = 1 - 0.6 * t;
 
     groundMat.emissiveIntensity = state.highlight ? 0.35 + 0.35 * Math.sin(time / 180) : 0;
-  }
+  });
 
-  let raf = 0;
-  function frame(time) {
-    const k = reducedMotion ? 1 : 0.12;
-    state.pull += (state.pullTarget - state.pull) * k;
-    state.ground += (state.groundTarget - state.ground) * k;
-    if (Math.abs(state.pullTarget - state.pull) < 1e-3) state.pull = state.pullTarget;
-    if (Math.abs(state.groundTarget - state.ground) < 1e-2) state.ground = state.groundTarget;
-    apply(time);
-    renderer.render(scene, camera);
-    raf = requestAnimationFrame(frame);
-  }
-  raf = requestAnimationFrame(frame);
-
-  function onWheel(e) {
-    if (!wheelEnabled) return;
-    e.preventDefault();
-    api.setPull(state.pullTarget + Math.sign(e.deltaY) * 0.06);
-    onPull(state.pullTarget);
-  }
-  renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
-
-  const api = {
-    kind: '3d',
-    setPull(p, instant = false) {
-      state.pullTarget = clamp01(p);
-      if (instant) state.pull = state.pullTarget;
-    },
-    setGround(g, instant = false) {
-      state.groundTarget = Math.max(0, g);
-      if (instant) state.ground = state.groundTarget;
-    },
-    setHighlight(on) {
-      state.highlight = on;
-    },
-    enableWheel(on) {
-      wheelEnabled = on;
-    },
-    onPull(cb) {
-      onPull = cb;
-    },
-    dispose() {
-      cancelAnimationFrame(raf);
-      ro.disconnect();
-      renderer.domElement.removeEventListener('wheel', onWheel);
-      renderer.dispose();
-      renderer.domElement.remove();
-    },
-  };
-  return api;
+  return stage.api;
 }

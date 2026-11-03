@@ -1,14 +1,19 @@
-// 事件 1-1 の試作：依頼 → 予想 → 調べる → 見破る → 直す → 解説 → 合言葉
+// 事件の流れ：依頼 → 予想 → 調べる → 見破る →（直す）→ 解説 → 合言葉
+// どの事件も同じ流れで、中身は src/cases/、場面は src/scenes/ から取ってくる。
 
-import { case1_1 as data } from './cases/case1-1.js';
-import { apparentRatio, trueRatio, predictionResult, clueFound, isTrickCorrect, isFixed } from './judge.js';
+import { CHAPTERS, CASES } from './cases/index.js';
+import { predictionResult, clueFound, isTrickCorrect, isFixed, isUnlocked } from './judge.js';
 import { rubyHtml } from './text.js';
 import { portrait, NAMES } from './characters.js';
-import { createBuildings3D, webglAvailable } from './scenes/buildings3d.js';
-import { createBuildings2D } from './scenes/buildings2d.js';
+import { createScene } from './scenes/index.js';
+import { figureFor } from './figures.js';
 
 const $ = (sel) => document.querySelector(sel);
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const params = new URLSearchParams(location.search);
+const force2d = params.has('2d');
+// ?all で全部の事件を選べる（開発・確認用）
+const openAll = params.has('all');
 
 // ---- 保存（使えない環境でも遊べるように、失敗は無視する） ----
 const SAVE_KEY = 'sujitantei';
@@ -39,6 +44,12 @@ $('#ruby-toggle').addEventListener('click', () => {
 });
 applyRuby();
 
+// ---- 遊んでいる事件 ----
+// 事件を始め直したり一覧に戻ったりしたら、前の事件の待ち（ボタンやスライダー）を全部はずす
+let run = new AbortController();
+let scene = null;
+let data = null;
+
 // ---- 会話 ----
 const fill = (text) => text.replaceAll('%NAME%', save.name || '見習い');
 
@@ -58,7 +69,8 @@ function addButton(label, className = '') {
   return b;
 }
 
-const clicked = (button) => new Promise((resolve) => button.addEventListener('click', resolve, { once: true }));
+const clicked = (button) =>
+  new Promise((resolve) => button.addEventListener('click', resolve, { once: true, signal: run.signal }));
 
 async function say(lines) {
   for (const line of lines) {
@@ -81,7 +93,7 @@ function ask(line, options) {
   show(line);
   $('#talk-actions').classList.add('choices');
   return new Promise((resolve) => {
-    for (const o of options) addButton(o.label, 'choice').addEventListener('click', () => resolve(o.id));
+    for (const o of options) addButton(o.label, 'choice').addEventListener('click', () => resolve(o.id), { signal: run.signal });
   });
 }
 
@@ -100,30 +112,6 @@ function renderNotebook() {
 $('#notebook-open').addEventListener('click', () => $('#notebook').showModal());
 $('#notebook-close').addEventListener('click', () => $('#notebook').close());
 
-// ---- 解説の絵：チラシの見え方と、正しい見え方を並べる ----
-function compareFigure() {
-  const max = Math.max(...data.values);
-  const chart = (x, title, from, note) => {
-    const bars = data.values
-      .map((v, i) => {
-        const h = ((v - from) / (max - from)) * 100;
-        return `<rect x="${x + 14 + i * 36}" y="${130 - h}" width="24" height="${h}" fill="#ffb347" stroke="#2b2b2b" stroke-width="3"/>`;
-      })
-      .join('');
-    return `<text x="${x + 80}" y="18" text-anchor="middle" font-weight="700">${title}</text>
-      ${bars}
-      <line x1="${x + 6}" x2="${x + 160}" y1="130" y2="130" stroke="#3f8f3a" stroke-width="4"/>
-      <text x="${x + 80}" y="154" text-anchor="middle">地面 ${from}${data.unit}</text>
-      <text x="${x + 80}" y="178" text-anchor="middle" font-weight="700" fill="#d62828">${note}</text>`;
-  };
-  const shown = Math.round(apparentRatio(data.values, data.ground));
-  const real = trueRatio(data.values).toFixed(2);
-  return `<svg viewBox="0 0 360 190" role="img" aria-label="チラシと正しいグラフの比べ">
-    ${chart(10, 'チラシ', data.ground, `${shown}倍に見える`)}
-    ${chart(190, '正しいグラフ', 0, `本当は${real}倍`)}
-  </svg>`;
-}
-
 // ---- 紙吹雪 ----
 function confetti() {
   if (reducedMotion) return;
@@ -140,58 +128,47 @@ function confetti() {
   }
 }
 
-// ---- 場面 ----
-const force2d = new URLSearchParams(location.search).has('2d');
-let scene = null;
-function makeScene() {
-  const stage = $('#stage');
-  if (!force2d && webglAvailable()) {
-    try {
-      return createBuildings3D(stage, data, { reducedMotion });
-    } catch (e) {
-      console.warn('3Dを使えないので2Dで表示します', e);
-    }
-  }
-  return createBuildings2D(stage, data, { reducedMotion });
-}
-
-// 「カメラを引く」：スライダーとホイールのどちらでも
+// ---- 調べる・直す ----
+// 「調べる」：スライダーと、場面の上のドラッグ・ホイールのどちらでも
 function waitForClue() {
-  const slider = $('#pull');
+  const slider = $('#explore');
   return new Promise((resolve) => {
     const check = (p) => {
-      if (clueFound(p)) {
-        slider.removeEventListener('input', onInput);
-        resolve();
-      }
+      if (clueFound(data, p)) resolve();
     };
-    const onInput = () => {
-      const p = slider.valueAsNumber / 100;
-      scene.setPull(p);
-      check(p);
-    };
-    slider.addEventListener('input', onInput);
-    scene.onPull((p) => {
+    slider.addEventListener(
+      'input',
+      () => {
+        const p = slider.valueAsNumber / 100;
+        scene.setExplore(p);
+        check(p);
+      },
+      { signal: run.signal },
+    );
+    scene.onExplore((p) => {
       slider.value = String(Math.round(p * 100));
       check(p);
     });
   });
 }
 
+function fixText(v) {
+  return data.fix.unit ? `${v}${data.fix.unit}` : '';
+}
+
 function waitForFix() {
-  const slider = $('#ground');
-  const out = $('#ground-value');
+  const slider = $('#fix');
   return new Promise((resolve) => {
-    const onInput = () => {
-      const g = slider.valueAsNumber;
-      out.textContent = `${g}${data.unit}`;
-      scene.setGround(g);
-      if (isFixed(g)) {
-        slider.removeEventListener('input', onInput);
-        resolve();
-      }
-    };
-    slider.addEventListener('input', onInput);
+    slider.addEventListener(
+      'input',
+      () => {
+        const v = slider.valueAsNumber;
+        $('#fix-value').textContent = fixText(v);
+        scene.setFix(v);
+        if (isFixed(data, v)) resolve();
+      },
+      { signal: run.signal },
+    );
   });
 }
 
@@ -203,6 +180,43 @@ $('#hint-button').addEventListener('click', () => {
   $('#hint').hidden = false;
 });
 
+// ---- 事件の一覧 ----
+function openSelect() {
+  run.abort();
+  showControl(null);
+  const chapter = CHAPTERS[0];
+  $('#select-title').textContent = `${chapter.title}（${chapter.place}）`;
+  const list = $('#case-list');
+  list.innerHTML = '';
+  chapter.cases.forEach((c) => {
+    const index = CASES.indexOf(c);
+    const open = openAll || isUnlocked(CASES, save.solved, index);
+    const li = document.createElement('li');
+    const b = document.createElement('button');
+    b.className = `case-button${save.solved[c.id] ? ' solved' : ''}${c.boss ? ' boss' : ''}`;
+    b.disabled = !open;
+    b.innerHTML = `<span class="case-id">${c.id}</span><span class="case-name">${open ? rubyHtml(c.title) : '？？？'}</span><span class="case-mark">${save.solved[c.id] ? '解決' : open ? '' : 'カギ'}</span>`;
+    b.addEventListener('click', () => startCase(c));
+    li.append(b);
+    list.append(li);
+  });
+  $('#select').hidden = false;
+}
+$('#files-open').addEventListener('click', openSelect);
+
+function startCase(c) {
+  run.abort();
+  run = new AbortController();
+  $('#select').hidden = true;
+  $('#card').hidden = true;
+  data = c;
+  scene?.dispose();
+  scene = createScene($('#stage'), data, { reducedMotion, force2d });
+  $('#stage').dataset.kind = scene.kind;
+  $('#case-title').innerHTML = rubyHtml(`事件 ${data.id}　${data.title}`);
+  playCase().catch((e) => console.error(e));
+}
+
 // ---- 事件の流れ ----
 async function playCase() {
   clues.length = 0;
@@ -210,13 +224,18 @@ async function playCase() {
   renderNotebook();
   $('#figure').hidden = true;
   $('#hint').hidden = true;
-  scene.setPull(0, true);
-  scene.setGround(data.ground, true);
   scene.setHighlight(false);
-  scene.enableWheel(false);
-  $('#pull').value = '0';
-  $('#ground').value = String(data.ground);
-  $('#ground-value').textContent = `${data.ground}${data.unit}`;
+  scene.enableInput(false);
+  $('#explore').value = '0';
+  $('#explore-label').innerHTML = rubyHtml(data.explore.label);
+  if (data.fix) {
+    const f = $('#fix');
+    f.min = String(data.fix.min);
+    f.max = String(data.fix.max);
+    f.value = String(data.fix.start);
+    $('#fix-label').innerHTML = rubyHtml(data.fix.label);
+    $('#fix-value').textContent = fixText(data.fix.start);
+  }
   showControl(null);
 
   // 依頼
@@ -228,13 +247,13 @@ async function playCase() {
 
   // 調べる
   await say(data.investigate);
-  show({ who: 'chief', text: 'カメラを引いて、ビルを遠くから見てみよう。' });
-  showControl('pull-control');
-  scene.enableWheel(true);
+  show({ who: 'chief', text: data.explore.prompt });
+  showControl('explore-control');
+  scene.enableInput(true);
   await waitForClue();
-  scene.enableWheel(false);
-  scene.setPull(1);
-  $('#pull').value = '100';
+  scene.enableInput(false);
+  scene.setExplore(1);
+  $('#explore').value = '100';
   scene.setHighlight(true);
   $('#hint').hidden = true;
   showControl(null);
@@ -254,19 +273,23 @@ async function playCase() {
   }
   scene.setHighlight(false);
 
-  // 直す
-  show({ who: 'chief', text: data.fix.text });
-  showControl('ground-control');
-  await waitForFix();
-  showControl(null);
-  await say([data.fix.done]);
+  // 直す（グラフの事件だけ）
+  if (data.fix) {
+    show({ who: 'chief', text: data.fix.text });
+    showControl('fix-control');
+    await waitForFix();
+    showControl(null);
+    await say([data.fix.done]);
+  } else {
+    await say([{ who: 'chief', text: 'そのとおり！ 見事に{見破|みやぶ}ったね。' }]);
+  }
 
   // 解説
-  $('#figure').innerHTML = compareFigure();
+  $('#figure').innerHTML = figureFor(data);
   $('#figure').hidden = false;
   await say(data.explain);
   const guessLabel = data.predict.options.find((o) => o.id === guess).label;
-  await say([{ who: 'chief', text: `%NAME%探偵の最初の予想は「${guessLabel}」だったね。見た目にまどわされないこと。それが探偵の第一歩だ。` }]);
+  await say([{ who: 'chief', text: `%NAME%{探偵|たんてい}の最初の予想は「${guessLabel}」だったね。${data.recall}` }]);
   $('#figure').hidden = true;
 
   // 合言葉
@@ -281,9 +304,16 @@ async function playCase() {
   await clicked($('#card-close'));
   $('#card').hidden = true;
 
-  show({ who: 'pocho', mood: 'happy', text: '事件解決ポチョ！ ゴマカシ社のチラシ、もうこわくないポチョ！' });
-  await clicked(addButton('もう一度遊ぶ', 'next'));
-  playCase();
+  await say(data.ending.slice(0, -1));
+  show(data.ending[data.ending.length - 1]);
+  const next = CASES[CASES.indexOf(data) + 1];
+  const again = addButton('もう一度遊ぶ', 'next');
+  const files = addButton('事件ファイルへ', 'next');
+  const go = next ? addButton(`次の事件 ${next.id} へ ▶`, 'next big') : null;
+  const choice = await Promise.race([clicked(again).then(() => 'again'), clicked(files).then(() => 'files'), go ? clicked(go).then(() => 'next') : new Promise(() => {})]);
+  if (choice === 'again') startCase(data);
+  else if (choice === 'next') startCase(next);
+  else openSelect();
 }
 
 // ---- はじめの画面 ----
@@ -292,9 +322,6 @@ $('#start').addEventListener('click', () => {
   save.name = $('#name').value.trim().slice(0, 10);
   store();
   $('#title').hidden = true;
-  scene = scene ?? makeScene();
-  $('#stage').dataset.kind = scene.kind;
-  playCase();
+  openSelect();
 });
-$('#case-title').innerHTML = rubyHtml(`事件 ${data.id}　${data.title}`);
 renderNotebook();

@@ -5,6 +5,8 @@
 export const case1_1 = {
   id: '1-1',
   chapter: 1,
+  scene: 'buildings',
+  client: 'baker',
   title: 'パン屋の「売り上げ{急上昇|きゅうじょうしょう}！」',
   unit: '個',
   item: 'メロンパン',
@@ -36,6 +38,11 @@ export const case1_1 = {
       correct: { who: 'chief', text: 'おや、するどいね。本当にそうか、{証拠|しょうこ}を集めよう。' },
       other: { who: 'chief', text: 'なるほど。本当はどうか、調べてみよう。' },
     },
+  },
+
+  explore: {
+    label: 'カメラを引く',
+    prompt: 'カメラを引いて、ビルを遠くから見てみよう。',
   },
 
   investigate: [
@@ -71,6 +78,12 @@ export const case1_1 = {
   deduce: { who: 'chief', text: 'さあ、トリックを{見破|みやぶ}ろう。ゴマカシ社はどうやって、売り上げを大きく見せた？' },
 
   fix: {
+    label: '地面の高さ',
+    min: 0,
+    max: 99,
+    start: 99,
+    target: 0,
+    unit: '個',
     text: 'そのとおり！ では正しいグラフに直そう。「地面の高さ」を0まで下げてごらん。',
     done: { who: 'pocho', mood: 'surprised', text: 'ビルがほとんど同じ高さになったポチョ！' },
   },
@@ -81,6 +94,10 @@ export const case1_1 = {
     { who: 'pocho', mood: 'sad', text: 'ポチョ、ビルの見えている所しか見てなかったポチョ…。' },
   ],
 
+  recall: '見た目にまどわされないこと。それが{探偵|たんてい}の第一歩だ。',
+
   password: '{軸|じく}はどこから？',
   passwordNote: 'グラフを見たら、まず{縦軸|たてじく}がいくつから始まっているかを{確|たし}かめよう。',
+
+  ending: [{ who: 'pocho', mood: 'happy', text: '事件解決ポチョ！ ゴマカシ社のチラシ、もうこわくないポチョ！' }],
 };
