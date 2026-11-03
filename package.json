@@ -1,0 +1,12 @@
+{
+  "name": "numeracy_learning",
+  "private": true,
+  "type": "module",
+  "description": "すうじ探偵事務所：数字のトリックを見破る探偵ゲーム",
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

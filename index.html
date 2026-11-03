@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>すうじ探偵事務所</title>
+  <link rel="stylesheet" href="src/style.css">
+</head>
+<body>
+  <div id="app">
+    <header>
+      <div class="logo">すうじ<ruby>探偵<rt>たんてい</rt></ruby>事務所</div>
+      <div id="case-title" class="case-title"></div>
+      <button id="ruby-toggle" class="small" aria-pressed="true">ふりがな</button>
+      <button id="notebook-open" class="small">手帳 <span id="notebook-count">0</span></button>
+    </header>
+
+    <div id="stage">
+      <div id="hint" class="hint" hidden></div>
+      <div id="figure" class="figure" hidden></div>
+    </div>
+
+    <div id="pull-control" class="control slider-row" hidden>
+      <label for="pull">カメラを引く</label>
+      <input id="pull" type="range" min="0" max="100" value="0">
+      <button id="hint-button" class="small">ヒント</button>
+    </div>
+    <div id="ground-control" class="control slider-row" hidden>
+      <label for="ground">地面の高さ</label>
+      <input id="ground" type="range" min="0" max="99" value="99">
+      <output id="ground-value">99個</output>
+    </div>
+
+    <section id="talk" aria-live="polite">
+      <div id="talk-portrait"></div>
+      <div>
+        <div id="talk-name"></div>
+        <div id="talk-text"></div>
+      </div>
+      <div id="talk-actions"></div>
+    </section>
+  </div>
+
+  <div id="title" class="overlay">
+    <div class="panel">
+      <h1>すうじ<ruby>探偵<rt>たんてい</rt></ruby>事務所</h1>
+      <p>数字のトリックを<ruby>見破<rt>みやぶ</rt></ruby>れ！</p>
+      <label for="name">あなたの名前</label>
+      <input id="name" maxlength="10" placeholder="見習い" autocomplete="off">
+      <button id="start" class="big">事件ファイルを開く</button>
+      <p class="note">試作：事件 1-1 だけ遊べます</p>
+    </div>
+  </div>
+
+  <div id="card" class="overlay" hidden>
+    <div class="panel card">
+      <p>合言葉カードを手に入れた！</p>
+      <div id="card-password" class="password-big"></div>
+      <p id="card-note"></p>
+      <button id="card-close" class="big">手帳にしまう</button>
+    </div>
+  </div>
+
+  <dialog id="notebook">
+    <h2><ruby>探偵<rt>たんてい</rt></ruby>手帳</h2>
+    <div id="notebook-body"></div>
+    <button id="notebook-close">とじる</button>
+  </dialog>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
