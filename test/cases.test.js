@@ -7,7 +7,7 @@ import { predictionResult, clueFound, DEFAULT_CLUE, isTrickCorrect, isFixed, isU
 import { NAMES } from '../src/characters.js';
 import { rubyHtml, plain } from '../src/text.js';
 
-const SCENES = ['buildings', 'pictogram', 'pie', 'logaxis', 'dualaxis'];
+const SCENES = ['buildings', 'pictogram', 'pie', 'logaxis', 'dualaxis', 'seesaw', 'crowd', 'ratio', 'galton', 'schools'];
 
 for (const data of CASES) {
   test(`${data.id}：予想は「見た目どおり」「正解」がちがう選択肢で、どれにも反応がある`, () => {

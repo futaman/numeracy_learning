@@ -184,22 +184,26 @@ $('#hint-button').addEventListener('click', () => {
 function openSelect() {
   run.abort();
   showControl(null);
-  const chapter = CHAPTERS[0];
-  $('#select-title').textContent = `${chapter.title}（${chapter.place}）`;
   const list = $('#case-list');
   list.innerHTML = '';
-  chapter.cases.forEach((c) => {
-    const index = CASES.indexOf(c);
-    const open = openAll || isUnlocked(CASES, save.solved, index);
-    const li = document.createElement('li');
-    const b = document.createElement('button');
-    b.className = `case-button${save.solved[c.id] ? ' solved' : ''}${c.boss ? ' boss' : ''}`;
-    b.disabled = !open;
-    b.innerHTML = `<span class="case-id">${c.id}</span><span class="case-name">${open ? rubyHtml(c.title) : '？？？'}</span><span class="case-mark">${save.solved[c.id] ? '解決' : open ? '' : 'カギ'}</span>`;
-    b.addEventListener('click', () => startCase(c));
-    li.append(b);
-    list.append(li);
-  });
+  for (const chapter of CHAPTERS) {
+    const head = document.createElement('li');
+    head.className = 'chapter-head';
+    head.textContent = `${chapter.title}（${chapter.place}）`;
+    list.append(head);
+    chapter.cases.forEach((c) => {
+      const index = CASES.indexOf(c);
+      const open = openAll || isUnlocked(CASES, save.solved, index);
+      const li = document.createElement('li');
+      const b = document.createElement('button');
+      b.className = `case-button${save.solved[c.id] ? ' solved' : ''}${c.boss ? ' boss' : ''}`;
+      b.disabled = !open;
+      b.innerHTML = `<span class="case-id">${c.id}</span><span class="case-name">${open ? rubyHtml(c.title) : '？？？'}</span><span class="case-mark">${save.solved[c.id] ? '解決' : open ? '' : 'カギ'}</span>`;
+      b.addEventListener('click', () => startCase(c));
+      li.append(b);
+      list.append(li);
+    });
+  }
   $('#select').hidden = false;
 }
 $('#files-open').addEventListener('click', openSelect);
@@ -232,6 +236,7 @@ async function playCase() {
     const f = $('#fix');
     f.min = String(data.fix.min);
     f.max = String(data.fix.max);
+    f.step = String(data.fix.step ?? 1);
     f.value = String(data.fix.start);
     $('#fix-label').innerHTML = rubyHtml(data.fix.label);
     $('#fix-value').textContent = fixText(data.fix.start);

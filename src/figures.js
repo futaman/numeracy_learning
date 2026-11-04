@@ -1,6 +1,7 @@
 // 解説の1枚の絵。左にゴマカシ社の見せ方、右に正しい見せ方を並べる。
 
-import { apparentRatio, trueRatio, logHeight, axisHeight } from './judge.js';
+import { apparentRatio, trueRatio, logHeight, axisHeight, mean, median, countAtLeast, schoolAverages } from './judge.js';
+import { plain } from './text.js';
 
 const INK = 'stroke="#2b2b2b" stroke-width="3" stroke-linejoin="round"';
 const wrap = (label, body) => `<svg viewBox="0 0 360 194" role="img" aria-label="${label}">${body}</svg>`;
@@ -111,7 +112,104 @@ function dualaxis(data) {
   return wrap('右の目盛りをせまくしたグラフと、0点からのグラフ', chart(0, 'チラシ', right.flyerAxis, 'ぴったり重なる') + chart(180, '0点から100点', right.fairAxis, '1.5点しか上がらない'));
 }
 
-const FIGURES = { buildings, pictogram, pie, logaxis, dualaxis };
+// 9人を少ない順に並べた棒。真ん中の子は金色、平均は点線
+function seesaw(data) {
+  const avg = mean(data.kids);
+  const mid = median(data.kids);
+  const top = Math.max(...data.kids);
+  const y = (v) => 150 - (v / top) * 118;
+  const midIndex = (data.kids.length - 1) / 2;
+  const bars = data.kids
+    .map((v, i) => `<rect x="${44 + i * 32}" y="${y(v).toFixed(1)}" width="20" height="${(150 - y(v)).toFixed(1)}" fill="${i === midIndex ? '#ffd166' : '#7ec8e3'}" stroke="#2b2b2b" stroke-width="1.5"/>`)
+    .join('');
+  const midX = 54 + midIndex * 32;
+  return wrap(
+    '9人を少ない順に並べると、平均より多いのは1人だけで、真ん中の子は1000円',
+    `${title(180, '9人を少ない順に並べると')}${bars}
+    <line x1="30" x2="330" y1="150" y2="150" stroke="#2b2b2b" stroke-width="3"/>
+    <line x1="30" x2="330" y1="${y(avg).toFixed(1)}" y2="${y(avg).toFixed(1)}" stroke="#d62828" stroke-width="2" stroke-dasharray="6 4"/>
+    <text x="34" y="${(y(avg) - 6).toFixed(1)}" font-size="13" font-weight="700" fill="#d62828">平均 ${avg}円</text>
+    <text x="${midX}" y="168" text-anchor="middle" font-size="13" font-weight="700">真ん中の子 ${mid}円</text>
+    <text x="${54 + 8 * 32 - 14}" y="44" text-anchor="end" font-size="13">${top}円</text>
+    ${note(180, `平均より多いのは ${data.kids.filter((v) => v > avg).length}人だけ`)}`,
+  );
+}
+
+function crowd(data) {
+  const bar = (x, v, label) => `<rect x="${x}" y="${150 - v * 50}" width="36" height="${v * 50}" fill="#ffd166" ${INK}/><text x="${x + 18}" y="168" text-anchor="middle" font-size="12">${label}</text><text x="${x + 18}" y="${143 - v * 50}" text-anchor="middle" font-weight="700">${v}人</text>`;
+  // 1万人を100×100のマスとして、光る人を1マスで描く
+  const grid = (x, y, count, label) => {
+    const cells = [[30, 40], [68, 62]].slice(0, count).map(([c, r]) => `<rect x="${x + c * 0.72}" y="${y + r * 0.72}" width="3" height="3" fill="#d62828"/>`).join('');
+    return `<rect x="${x}" y="${y}" width="72" height="72" fill="#dfeaf3" stroke="#2b2b2b" stroke-width="2"/>${cells}<text x="${x + 36}" y="${y + 90}" text-anchor="middle" font-size="12">${label}</text>`;
+  };
+  return wrap(
+    '棒で比べると2倍に見えるが、1万人の中では1人と2人',
+    `${title(84, 'チラシ')}${bar(40, data.before, 'しない人')}${bar(92, data.after, 'する人')}${note(84, '2倍に見える')}
+    ${title(268, '1万人の中で')}${grid(186, 52, data.before, '1万人に1人')}${grid(278, 52, data.after, '1万人に2人')}${note(268, 'ふえたのは1人')}`,
+  );
+}
+
+function ratio(data) {
+  const row = (x, y, scale, item, foot) => {
+    const add = item.after - item.before;
+    const before = item.before * scale.before;
+    return `<text x="${x}" y="${y - 6}" font-size="12">${plain(item.name)}</text>
+      <rect x="${x}" y="${y}" width="${before.toFixed(1)}" height="20" fill="#e8e8e8" stroke="#2b2b2b" stroke-width="2"/>
+      <rect x="${(x + before).toFixed(1)}" y="${y}" width="${Math.max(add * scale.add, 1.5).toFixed(1)}" height="20" fill="${item.color}" stroke="#2b2b2b" stroke-width="2"/>
+      <text x="${(x + before + add * scale.add + 5).toFixed(1)}" y="${y + 15}" font-size="12" font-weight="700">${foot}</text>`;
+  };
+  const [a, b] = data.items;
+  const diff = { before: 0, add: 0.8 };
+  const rate = (i) => ({ before: 60 / i.before, add: 60 / i.before });
+  return wrap(
+    '差で並べると同じに見え、比で並べるとパンは2倍、給食費は1.02倍',
+    `${title(88, '差で並べる')}${row(14, 62, diff, a, '+100円')}${row(14, 118, diff, b, '+100円')}${note(88, '同じに見える')}
+    ${title(268, '比で並べる')}${row(190, 62, rate(a), a, `${a.after / a.before}倍`)}${row(190, 118, rate(b), b, `${b.after / b.before}倍`)}${note(268, 'パンだけ2倍')}`,
+  );
+}
+
+function galton(data) {
+  const hill = (x, shift, foot) => {
+    const X = (s) => x + 4 + ((s - 30) / 5) * 11.5;
+    const bars = Object.entries(data.histogram)
+      .map(([s, c]) => {
+        const score = Number(s) + shift;
+        return `<rect x="${X(score).toFixed(1)}" y="${130 - c * 3.6}" width="10" height="${c * 3.6}" fill="${score >= data.myScore ? '#ff7a45' : '#7ec8e3'}" stroke="#2b2b2b" stroke-width="1.5"/>`;
+      })
+      .join('');
+    const count = countAtLeast(data.histogram, data.myScore, shift);
+    const flag = X(data.myScore) + 5;
+    return `${title(x + 82, `平均${50 + shift}点のテスト`)}${bars}
+      <line x1="${x + 2}" x2="${x + 164}" y1="130" y2="130" stroke="#2b2b2b" stroke-width="3"/>
+      <line x1="${flag}" x2="${flag}" y1="30" y2="134" stroke="#d62828" stroke-width="2" stroke-dasharray="4 3"/>
+      <text x="${flag}" y="148" text-anchor="middle" font-size="12" font-weight="700">65点</text>
+      <text x="${x + 82}" y="167" text-anchor="middle" font-size="12">65点以上は${count}人</text>${note(x + 82, foot)}`;
+  };
+  return wrap('同じ65点でも、点の山のどこにいるかで意味が変わる', hill(4, 0, '上のほう') + hill(186, data.fix.target - 50, '下のほう'));
+}
+
+function schools(data) {
+  const averages = schoolAverages({ sizes: data.schools.map((s) => s.size), ...data.simulation });
+  const X = (v) => 104 + ((v - 30) / 60) * 240;
+  const rows = data.schools
+    .map((s, i) => {
+      const a = averages[i];
+      const lo = Math.min(...a);
+      const hi = Math.max(...a);
+      const y = 44 + i * 32;
+      return `<text x="6" y="${y + 5}" font-size="12">${s.name} ${s.size}人</text>
+        <line x1="${X(lo).toFixed(1)}" x2="${X(hi).toFixed(1)}" y1="${y}" y2="${y}" stroke="${s.color}" stroke-width="8" stroke-linecap="round"/>`;
+    })
+    .join('');
+  return wrap(
+    '人数が少ない学校ほど、平均点の動く幅が大きい',
+    `${title(180, '20回のテストの平均点が動いた幅')}${rows}
+    <line x1="${X(60)}" x2="${X(60)}" y1="30" y2="152" stroke="#2b2b2b" stroke-width="2" stroke-dasharray="4 3"/>
+    <text x="${X(60)}" y="168" text-anchor="middle" font-size="12">60点</text>${note(180, '人数が少ないほど、大きくぶれる')}`,
+  );
+}
+
+const FIGURES = { buildings, pictogram, pie, logaxis, dualaxis, seesaw, crowd, ratio, galton, schools };
 
 export function figureFor(data) {
   return FIGURES[data.scene](data);

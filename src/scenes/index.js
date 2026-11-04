@@ -9,6 +9,14 @@ import { createPie3D } from './pie3d.js';
 import { createPie2D } from './pie2d.js';
 import { createLogAxis2D } from './logaxis2d.js';
 import { createDualAxis2D } from './dualaxis2d.js';
+import { createSeesaw3D } from './seesaw3d.js';
+import { createSeesaw2D } from './seesaw2d.js';
+import { createCrowd3D } from './crowd3d.js';
+import { createCrowd2D } from './crowd2d.js';
+import { createRatio2D } from './ratio2d.js';
+import { createGalton3D } from './galton3d.js';
+import { createGalton2D } from './galton2d.js';
+import { createSchools2D } from './schools2d.js';
 
 // [3D版, 2D版]。グラフそのものを読む事件は、3Dにせず2Dの絵だけを使う
 const SCENES = {
@@ -17,6 +25,11 @@ const SCENES = {
   pie: [createPie3D, createPie2D],
   logaxis: [null, createLogAxis2D],
   dualaxis: [null, createDualAxis2D],
+  seesaw: [createSeesaw3D, createSeesaw2D],
+  crowd: [createCrowd3D, createCrowd2D],
+  ratio: [null, createRatio2D],
+  galton: [createGalton3D, createGalton2D],
+  schools: [null, createSchools2D],
 };
 
 export function createScene(container, data, { reducedMotion = false, force2d = false } = {}) {
@@ -26,6 +39,7 @@ export function createScene(container, data, { reducedMotion = false, force2d = 
       return make3d(container, data, { reducedMotion });
     } catch (e) {
       console.warn('3Dを使えないので2Dで表示します', e);
+      container.querySelectorAll('canvas').forEach((c) => c.remove());
     }
   }
   return make2d(container, data, { reducedMotion });

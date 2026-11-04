@@ -102,3 +102,108 @@ export function axisHeight(v, lo, hi) {
 export function lineGap(a, aAxis, b, bAxis) {
   return Math.max(...a.map((v, i) => Math.abs(axisHeight(v, ...aAxis) - axisHeight(b[i], ...bAxis))));
 }
+
+// ---- 第2章 平均・中央値・差と比 ----
+
+export function mean(values) {
+  return values.reduce((a, b) => a + b, 0) / values.length;
+}
+
+// 少ない順に並べたときの真ん中の値
+export function median(values) {
+  const s = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+
+// 平均より多い人の数
+export function countAboveMean(values) {
+  const m = mean(values);
+  return values.filter((v) => v > m).length;
+}
+
+// 同じ人数の中で、何倍か（比）と何人ふえたか（差）
+export function riskChange(before, after, population) {
+  return { times: after / before, added: after - before, addedRate: (after - before) / population };
+}
+
+// 値上げの差（いくら上がったか）と比（何倍になったか）
+export function priceChange(before, after) {
+  return { difference: after - before, ratio: after / before };
+}
+
+// ---- 2-4 点数の山 ----
+
+// { 点数: 人数 } の表で、score 点以上の人数。shift だけ全員の点をずらして数える
+export function countAtLeast(histogram, score, shift = 0) {
+  return Object.entries(histogram).reduce((sum, [s, count]) => sum + (Number(s) + shift >= score ? count : 0), 0);
+}
+
+// 種（seed）が同じなら、いつも同じ乱数の列になる
+export function seededRandom(seed) {
+  let s = seed >>> 0;
+  return () => {
+    s = (s + 0x6d2b79f5) >>> 0;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function shuffle(list, random) {
+  for (let i = list.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [list[i], list[j]] = [list[j], list[i]];
+  }
+  return list;
+}
+
+// ゴルトンボードの玉。人数の表どおりの場所に落ちるように、右に曲がる回数を決めてから道順をまぜる。
+// path はピンの段ごとの向き（0=左、1=右）。slot は同じ場所の玉の中で何個目か。
+export function galtonBalls({ histogram, rows, lowest, step, seed }) {
+  const random = seededRandom(seed);
+  const balls = [];
+  for (const [score, count] of Object.entries(histogram)) {
+    const rights = (Number(score) - lowest) / step;
+    for (let i = 0; i < count; i++) {
+      const path = Array.from({ length: rows }, (_, r) => (r < rights ? 1 : 0));
+      balls.push({ score: Number(score), rights, path: shuffle(path, random) });
+    }
+  }
+  shuffle(balls, random);
+  const used = {};
+  for (const b of balls) {
+    b.slot = used[b.score] ?? 0;
+    used[b.score] = b.slot + 1;
+  }
+  return balls;
+}
+
+// ---- 2-5 小さい学校の平均 ----
+
+// ふつうの散らばりの乱数（ボックス・ミュラー法）
+function normal(random) {
+  return Math.sqrt(-2 * Math.log(1 - random())) * Math.cos(2 * Math.PI * random());
+}
+
+// 同じ力の生徒たちがテストを何度も受けたときの、学校ごとの平均点。
+// 返り値は学校ごとの配列で、1回目から順に平均点が並ぶ。
+export function schoolAverages({ sizes, rounds, seed, score, spread }) {
+  const random = seededRandom(seed);
+  return sizes.map((size) =>
+    Array.from({ length: rounds }, () => {
+      let sum = 0;
+      for (let i = 0; i < size; i++) sum += Math.min(100, Math.max(0, score + spread * normal(random)));
+      return Math.round((sum / size) * 10) / 10;
+    }),
+  );
+}
+
+// i 回目のテストで、平均点がいちばん高い学校（いちばん低い学校）の番号
+export function topSchool(averages, i) {
+  return averages.reduce((best, a, s) => (a[i] > averages[best][i] ? s : best), 0);
+}
+export function bottomSchool(averages, i) {
+  return averages.reduce((best, a, s) => (a[i] < averages[best][i] ? s : best), 0);
+}

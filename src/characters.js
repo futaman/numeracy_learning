@@ -8,6 +8,10 @@ export const NAMES = {
   shop: '携帯ショップの店長',
   pharmacist: '薬局の先生',
   nobiru: 'ゴマカシ社のノビール',
+  student: 'ミナさん',
+  gamer: 'ゲンタさん',
+  cook: '給食の先生',
+  heikin: 'ゴマカシ社のヘイキン男爵',
 };
 
 const S = 'stroke="#2b2b2b" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"';
@@ -105,7 +109,53 @@ function nobiru(mood) {
     ${mouth}`;
 }
 
+// ミナさん：おかっぱ頭
+function student() {
+  return `
+    <path d="M22 62 Q18 22 50 20 Q82 22 78 62 L78 72 H66 V62 H34 V72 H22 Z" fill="#5b4636" ${S}/>
+    <circle cx="50" cy="60" r="23" fill="#ffe0c4" ${S}/>
+    <path d="M28 52 Q50 34 72 52 Q50 44 28 52 Z" fill="#5b4636" ${S}/>
+    <circle cx="42" cy="60" r="3" fill="#2b2b2b"/><circle cx="58" cy="60" r="3" fill="#2b2b2b"/>
+    <path d="M44 71 Q50 75 56 71" fill="none" ${S}/>
+    <circle cx="35" cy="68" r="3.5" fill="#ff9fb2"/><circle cx="65" cy="68" r="3.5" fill="#ff9fb2"/>`;
+}
+
+// ゲンタさん：つんつん頭とヘッドホン
+function gamer() {
+  return `
+    <path d="M26 46 L24 28 L36 34 L40 18 L50 32 L60 18 L64 34 L76 28 L74 46 Z" fill="#3a3a55" ${S}/>
+    <circle cx="50" cy="60" r="25" fill="#f3c89b" ${S}/>
+    <path d="M25 58 Q25 30 50 30 Q75 30 75 58" fill="none" stroke="#ff7a45" stroke-width="6" stroke-linecap="round"/>
+    <rect x="18" y="54" width="10" height="18" rx="4" fill="#ff7a45" ${S}/><rect x="72" y="54" width="10" height="18" rx="4" fill="#ff7a45" ${S}/>
+    <circle cx="42" cy="60" r="3" fill="#2b2b2b"/><circle cx="58" cy="60" r="3" fill="#2b2b2b"/>
+    <path d="M43 72 Q50 77 57 72" fill="none" ${S}/>`;
+}
+
+// 給食の先生：白い三角きんとマスク
+function cook() {
+  return `
+    <circle cx="50" cy="60" r="26" fill="#ffe0c4" ${S}/>
+    <path d="M22 50 Q50 14 78 50 Q50 40 22 50 Z" fill="#fff" ${S}/>
+    <circle cx="41" cy="58" r="3" fill="#2b2b2b"/><circle cx="59" cy="58" r="3" fill="#2b2b2b"/>
+    <path d="M32 67 H68 V76 Q50 86 32 76 Z" fill="#fff" ${S}/>`;
+}
+
+// ゴマカシ社の幹部ヘイキン男爵：片めがねと、まっすぐなひげ。smug（得意）・angry（くやしい）
+function heikin(mood) {
+  const brow = mood === 'angry' ? `<path d="M32 46 L46 52 M68 46 L54 52" fill="none" ${S}/>` : `<path d="M32 49 H46 M54 49 H68" fill="none" ${S}/>`;
+  const mouth = mood === 'angry' ? `<path d="M42 84 Q50 78 58 84" fill="none" ${S}/>` : `<path d="M43 80 H57" fill="none" ${S}/>`;
+  return `
+    <rect x="30" y="8" width="40" height="24" fill="#3f8f7a" ${S}/>
+    <path d="M14 32 H86" fill="none" stroke="#2b2b2b" stroke-width="7" stroke-linecap="round"/>
+    <ellipse cx="50" cy="62" rx="27" ry="27" fill="#f6d7b0" ${S}/>
+    ${brow}
+    <circle cx="39" cy="57" r="3" fill="#2b2b2b"/><circle cx="61" cy="57" r="3" fill="#2b2b2b"/>
+    <circle cx="61" cy="57" r="9" fill="none" ${S}/><path d="M69 61 L74 80" fill="none" stroke="#2b2b2b" stroke-width="2"/>
+    <path d="M22 71 H78" fill="none" stroke="#2b2b2b" stroke-width="6" stroke-linecap="round"/>
+    ${mouth}`;
+}
+
 export function portrait(who, mood) {
-  const body = { pocho, chief, baker, yaoya, shop, pharmacist, nobiru }[who](mood);
+  const body = { pocho, chief, baker, yaoya, shop, pharmacist, nobiru, student, gamer, cook, heikin }[who](mood);
   return `<svg viewBox="0 0 100 100" aria-hidden="true">${body}</svg>`;
 }
